@@ -37,6 +37,9 @@ class wp_bootstrap_navwalker extends Walker_Nav_Menu {
 	public function start_el( &$output, $item, $depth = 0, $args = array(), $id = 0 ) {
 		$indent = ( $depth ) ? str_repeat( "\t", $depth ) : '';
 
+		$args->top_level_follow = isset($args->top_level_follow)
+			? $args->top_level_follow : false;
+
 		/**
 		 * Dividers, Headers or Disabled
 		 * =============================
@@ -79,7 +82,16 @@ class wp_bootstrap_navwalker extends Walker_Nav_Menu {
 			$atts['title']  = ! empty( $item->title )	? $item->title	: '';
 			$atts['target'] = ! empty( $item->target )	? $item->target	: '';
 			$atts['rel']    = ! empty( $item->xfn )		? $item->xfn	: '';
-			$atts['href']   = ! empty( $item->url ) ? $item->url : '';
+
+			// If item has_children add atts to a.
+			if ( $args->has_children && $depth === 0 && !$args->top_level_follow ) {
+				$atts['href']   		= '#';
+				$atts['data-toggle']	= 'dropdown';
+				$atts['class']			= 'dropdown-toggle';
+				$atts['aria-haspopup']	= 'true';
+			} else {
+				$atts['href'] = ! empty( $item->url ) ? $item->url : '';
+			}
 
 			$atts = apply_filters( 'nav_menu_link_attributes', $atts, $item, $args );
 
