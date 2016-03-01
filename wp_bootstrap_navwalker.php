@@ -1,5 +1,7 @@
 <?php
 
+defined( 'ABSPATH' ) or die( 'ABSPATH not defined.' );
+
 /**
  * Class Name: wp_bootstrap_navwalker
  * GitHub URI: https://github.com/twittem/wp-bootstrap-navwalker
@@ -22,6 +24,10 @@ class wp_bootstrap_navwalker extends Walker_Nav_Menu {
 	public function start_lvl( &$output, $depth = 0, $args = array() ) {
 		$indent = str_repeat( "\t", $depth );
 		$output .= "\n$indent<ul role=\"menu\" class=\" dropdown-menu\">\n";
+	}
+
+	public function end_el( &$output, $item, $depth = 0, $args = array(), $id = 0 ) {
+		parent::end_el( $output, $item, $depth, $args, $id);
 	}
 
 	/**
@@ -118,7 +124,7 @@ class wp_bootstrap_navwalker extends Walker_Nav_Menu {
 				$item_output .= '<a'. $attributes .'>';
 
 			$item_output .= $args->link_before . apply_filters( 'the_title', $item->title, $item->ID ) . $args->link_after;
-			$item_output .= ( $args->has_children && 0 === $depth ) ? ' <span class="caret"></span></a>' : '</a>';
+			$item_output .= ( $args->has_children ) ? ' <span class="caret"></span></a>' : '</a>';
 			$item_output .= $args->after;
 
 			$output .= apply_filters( 'walker_nav_menu_start_el', $item_output, $item, $depth, $args );
@@ -157,6 +163,92 @@ class wp_bootstrap_navwalker extends Walker_Nav_Menu {
 
         parent::display_element( $element, $children_elements, $max_depth, $depth, $args, $output );
     }
+
+
+	/**
+	 * Display array of elements hierarchically.
+	 *
+	 * Does not assume any existing order of elements.
+	 *
+	 * $max_depth = -1 means flatly display every element.
+	 * $max_depth = 0 means display all levels.
+	 * $max_depth > 0 specifies the number of display levels.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @param array $elements  An array of elements.
+	 * @param int   $max_depth The maximum hierarchical depth.
+	 * @return string The hierarchical item output.
+	 */
+	public function walk( $elements, $max_depth ) {
+		$args = array_slice(func_get_args(), 2);
+		$output = '';
+
+		//invalid parameter or nothing to walk
+		if ( $max_depth < -1 || empty( $elements ) ) {
+			return $output;
+		}
+
+		$parent_field = $this->db_fields['parent'];
+
+		// flat display
+		if ( -1 == $max_depth ) {
+			$empty_array = array();
+			foreach ( $elements as $e )
+				$this->display_element( $e, $empty_array, 1, 0, $args, $output );
+			return $output;
+		}
+
+		/*
+		 * Need to display in hierarchical order.
+		 * Separate elements into two buckets: top level and children elements.
+		 * Children_elements is two dimensional array, eg.
+		 * Children_elements[10][] contains all sub-elements whose parent is 10.
+		 */
+		$top_level_elements = array();
+		$children_elements  = array();
+		foreach ( $elements as $e) {
+			if ( empty( $e->$parent_field ) )
+				$top_level_elements[] = $e;
+			else
+				$children_elements[ $e->$parent_field ][] = $e;
+		}
+
+		/*
+		 * When none of the elements is top level.
+		 * Assume the first one must be root of the sub elements.
+		 */
+		if ( empty($top_level_elements) ) {
+
+			$first = array_slice( $elements, 0, 1 );
+			$root = $first[0];
+
+			$top_level_elements = array();
+			$children_elements  = array();
+			foreach ( $elements as $e) {
+				if ( $root->$parent_field == $e->$parent_field )
+					$top_level_elements[] = $e;
+				else
+					$children_elements[ $e->$parent_field ][] = $e;
+			}
+		}
+
+		foreach ( $top_level_elements as $e )
+			$this->display_element( $e, $children_elements, $max_depth, 0, $args, $output );
+
+		/*
+		 * If we are displaying all levels, and remaining children_elements is not empty,
+		 * then we got orphans, which should be displayed regardless.
+		 */
+		if ( ( $max_depth == 0 ) && count( $children_elements ) > 0 ) {
+			$empty_array = array();
+			foreach ( $children_elements as $orphans )
+				foreach ( $orphans as $op )
+					$this->display_element( $op, $empty_array, 1, 0, $args, $output );
+		 }
+
+		 return $output;
+	}
 
 	/**
 	 * Menu Fallback
